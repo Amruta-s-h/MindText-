@@ -1,0 +1,102 @@
+{
+  "model_name": "TF-IDF + Logistic Regression Sentiment Classifier",
+  "dataset": "TweetEval Sentiment (Hugging Face)",
+  "label_mapping": {
+    "0": "Negative",
+    "1": "Neutral",
+    "2": "Positive"
+  },
+  "class_names": [
+    "Negative",
+    "Neutral",
+    "Positive"
+  ],
+  "random_seed": 42,
+  "hyperparameters": {
+    "best_c": 5.0,
+    "max_features": 15000,
+    "ngram_range": [
+      1,
+      2
+    ],
+    "solver": "lbfgs",
+    "max_iter": 1000
+  },
+  "tuning_history": [
+    {
+      "C": 0.2,
+      "val_accuracy": 0.6565,
+      "val_macro_f1": 0.5640450568624983
+    },
+    {
+      "C": 0.5,
+      "val_accuracy": 0.6715,
+      "val_macro_f1": 0.6145631414036021
+    },
+    {
+      "C": 1.0,
+      "val_accuracy": 0.679,
+      "val_macro_f1": 0.6356698474238093
+    },
+    {
+      "C": 2.0,
+      "val_accuracy": 0.6805,
+      "val_macro_f1": 0.6469928757378426
+    },
+    {
+      "C": 5.0,
+      "val_accuracy": 0.6785,
+      "val_macro_f1": 0.648318027951008
+    }
+  ],
+  "test_metrics": {
+    "accuracy": 0.578394659719961,
+    "macro_precision": 0.5676140878104711,
+    "macro_recall": 0.5701797474746298,
+    "macro_f1": 0.5634057535800018,
+    "weighted_f1": 0.5764925052154375,
+    "confusion_matrix": [
+      [
+        1840,
+        1713,
+        419
+      ],
+      [
+        1022,
+        3838,
+        1077
+      ],
+      [
+        157,
+        791,
+        1427
+      ]
+    ],
+    "per_class": {
+      "Negative": {
+        "precision": 0.60947333554157,
+        "recall": 0.46324269889224573,
+        "f1_score": 0.5263910742383064,
+        "support": 3972
+      },
+      "Neutral": {
+        "precision": 0.6051718700725324,
+        "recall": 0.6464544382684858,
+        "f1_score": 0.625132339767082,
+        "support": 5937
+      },
+      "Positive": {
+        "precision": 0.488197057817311,
+        "recall": 0.6008421052631578,
+        "f1_score": 0.5386938467346168,
+        "support": 2375
+      }
+    }
+  },
+  "saved_at": "2026-11-23T15:33:25.986244+00:00",
+  "artifacts": {
+    "pipeline": "sentiment_pipeline.joblib",
+    "vectorizer": "tfidf_vectorizer.joblib",
+    "classifier": "sentiment_model.joblib"
+  }
+}
