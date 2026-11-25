@@ -73,6 +73,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     const data = isJson ? await response.json() : null;
 
     if (!response.ok) {
+      if (!isJson && response.status >= 500) {
+        throw new ApiError(
+          `Server error (${response.status}): The backend service is currently unavailable or returned an unexpected error.`,
+          response.status
+        );
+      }
       const serverMessage = data?.error || data?.message || response.statusText;
       throw new ApiError(serverMessage || `Request failed with status ${response.status}`, response.status);
     }

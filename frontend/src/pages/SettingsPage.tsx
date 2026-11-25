@@ -7,17 +7,25 @@ import {
   Key,
   Trash2,
   CheckCircle2,
+  LogOut,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import type { HealthResponse } from '../types/sentiment';
 
 interface SettingsPageProps {
   health: HealthResponse | null;
   onRefreshHealth: () => void;
+  onLogoutSuccess?: () => void;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ health, onRefreshHealth }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({
+  health,
+  onRefreshHealth,
+  onLogoutSuccess,
+}) => {
   const { theme, setTheme } = useTheme();
+  const { user, logout } = useAuth();
   const [clearedNotice, setClearedNotice] = useState(false);
 
   const handleClearLocalStorage = () => {
@@ -188,6 +196,31 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ health, onRefreshHea
         >
           <Trash2 className="w-3.5 h-3.5 text-slate-400" />
           <span>Reset Cache</span>
+        </button>
+      </div>
+
+      {/* 5. Account Session & Logout */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+            Account Session
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            {user
+              ? `Signed in as ${user.full_name} (${user.email}). Logging out clears your local JWT token.`
+              : 'End your current authenticated session.'}
+          </p>
+        </div>
+
+        <button
+          onClick={() => {
+            logout();
+            onLogoutSuccess?.();
+          }}
+          className="inline-flex items-center gap-1.5 px-4 py-2 border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-950/70 rounded-xl text-xs font-semibold text-rose-700 dark:text-rose-300 transition cursor-pointer"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span>Logout</span>
         </button>
       </div>
     </div>

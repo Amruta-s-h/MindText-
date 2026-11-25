@@ -7,6 +7,8 @@ import {
   updateUserProfile,
   logoutUser,
   getStoredToken,
+  setStoredToken,
+  ApiError,
 } from '../services/api';
 
 interface AuthContextType {
@@ -52,10 +54,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     const res = await loginUser({ email, password });
-    if (res.user) {
-      setUser(res.user);
-    } else {
-      await refreshUser();
+    if (!res.token) {
+      throw new ApiError('Authentication failed: missing access token.');
+    }
+    setStoredToken(res.token);
+    try {
+      const userData = await getCurrentUser();
+      setUser(userData);
+    } catch (err) {
+      logoutUser();
+      setUser(null);
+      throw err;
     }
   };
 
@@ -66,11 +75,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password,
       confirm_password: confirmPassword,
     });
-    if (res.user) {
-      setUser(res.user);
-    } else {
-      await refreshUser();
+    if (res.token) {
+      setStoredToken(res.token);
     }
+    // Keep user unauthenticated until they explicitly log in on the Login page
   };
 
   const logout = () => {

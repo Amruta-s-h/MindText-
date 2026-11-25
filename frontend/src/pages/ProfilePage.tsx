@@ -127,7 +127,7 @@ export const ProfilePage: React.FC<{ onLogoutSuccess: () => void }> = ({ onLogou
           className="inline-flex items-center gap-1.5 px-4 py-2 border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded-xl transition cursor-pointer"
         >
           <LogOut className="w-4 h-4" />
-          <span>Sign Out</span>
+          <span>Logout</span>
         </button>
       </div>
 

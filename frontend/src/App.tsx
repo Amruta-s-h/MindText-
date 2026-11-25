@@ -1,7 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Navbar, type NavTab } from './components/Navbar';
+import { Navbar } from './components/Navbar';
 import { LandingPage } from './pages/LandingPage';
 import { WorkspacePage } from './pages/WorkspacePage';
 import { AnalyticsDashboard } from './pages/AnalyticsDashboard';
@@ -18,11 +26,40 @@ import {
   ApiError,
 } from './services/api';
 import type { HealthResponse, PredictionData } from './types/sentiment';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Sparkles } from 'lucide-react';
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return null;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  return <>{children}</>;
+}
+
+function PublicAuthRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return null;
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/workspace" replace />;
+  }
+
+  return <>{children}</>;
+}
 
 function MindTextApp() {
-  const { user } = useAuth();
-  const [currentTab, setCurrentTab] = useState<NavTab>('landing');
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   // Backend Health State
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -49,23 +86,44 @@ function MindTextApp() {
     }
   }, []);
 
-  // 2. Fetch Recent Predictions
+  // 2. Fetch Recent Predictions (Authenticated Users Only)
   const fetchRecent = useCallback(async () => {
+    if (!isAuthenticated) {
+      setRecentPredictions([]);
+      return;
+    }
     try {
       const res = await getHistory({ limit: 5 });
-      setRecentPredictions(res.data || []);
-      if (!currentPrediction && res.data && res.data.length > 0) {
-        setCurrentPrediction(res.data[0]);
+      const items = res.data || [];
+      setRecentPredictions(items);
+      if (items.length > 0) {
+        setCurrentPrediction((prev) => prev ?? items[0]);
       }
     } catch {
       setRecentPredictions([]);
     }
-  }, [currentPrediction]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     fetchHealth();
-    fetchRecent();
-  }, [fetchHealth, fetchRecent, user]);
+  }, [fetchHealth]);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      fetchRecent();
+    } else {
+      setCurrentPrediction(null);
+      setRecentPredictions([]);
+      setErrorMessage(null);
+    }
+  }, [isAuthenticated, user, fetchRecent]);
+
+  const handleLogoutSuccess = useCallback(() => {
+    setCurrentPrediction(null);
+    setRecentPredictions([]);
+    setErrorMessage(null);
+    navigate('/login', { replace: true });
+  }, [navigate]);
 
   // 3. Handle Sentiment Prediction Submission
   const handleAnalyze = async (text: string) => {
@@ -89,21 +147,36 @@ function MindTextApp() {
     }
   };
 
+  // Prevent workspace or protected views from flashing while verifying stored JWT token
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center px-4 transition-colors duration-200">
+        <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-200 dark:shadow-none mb-4">
+          <Sparkles className="w-6 h-6 animate-pulse" />
+        </div>
+        <div className="w-7 h-7 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-sm font-bold text-slate-900 dark:text-white">Verifying Session...</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          Checking authentication with MindText server
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between font-sans antialiased transition-colors duration-200">
       {/* Top Navbar */}
       <Navbar
-        currentTab={currentTab}
-        onTabChange={setCurrentTab}
         health={health}
         healthLoading={healthLoading}
         onRefreshHealth={fetchHealth}
+        onLogoutSuccess={handleLogoutSuccess}
       />
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 flex-1 w-full space-y-6">
-        {/* Backend Offline Banner */}
-        {!health && !healthLoading && (
+        {/* Backend Offline Banner (shown inside authenticated app) */}
+        {isAuthenticated && !health && !healthLoading && (
           <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-2xl p-4 flex items-start gap-3 shadow-2xs">
             <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div className="text-xs text-amber-900 dark:text-amber-200 flex-1">
@@ -116,73 +189,129 @@ function MindTextApp() {
           </div>
         )}
 
-        {/* View Switcher */}
-        {currentTab === 'landing' && (
-          <LandingPage
-            onOpenWorkspace={() => setCurrentTab('workspace')}
-            onOpenAnalytics={() => setCurrentTab('analytics')}
-            onOpenModelInfo={() => setCurrentTab('model')}
+        {/* Route Switcher */}
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <Navigate to={isAuthenticated ? '/workspace' : '/login'} replace />
+            }
           />
-        )}
 
-        {currentTab === 'workspace' && (
-          <WorkspacePage
-            onAnalyze={handleAnalyze}
-            loading={predictionLoading}
-            currentPrediction={currentPrediction}
-            errorMessage={errorMessage}
-            onClearError={() => setErrorMessage(null)}
-            recentPredictions={recentPredictions}
-            onSelectRecent={(item) => setCurrentPrediction(item)}
-            onNavigateToHistory={() => setCurrentTab('history')}
+          <Route
+            path="/login"
+            element={
+              <PublicAuthRoute>
+                <LoginPage onSuccess={() => fetchRecent()} />
+              </PublicAuthRoute>
+            }
           />
-        )}
 
-        {currentTab === 'analytics' && (
-          <AnalyticsDashboard onNavigateToWorkspace={() => setCurrentTab('workspace')} />
-        )}
-
-        {currentTab === 'model' && <ModelPerformance />}
-
-        {currentTab === 'history' && (
-          <HistoryPage onHistoryChange={fetchRecent} />
-        )}
-
-        {currentTab === 'settings' && (
-          <SettingsPage health={health} onRefreshHealth={fetchHealth} />
-        )}
-
-        {currentTab === 'login' && (
-          <LoginPage
-            onSuccess={() => {
-              setCurrentTab('workspace');
-              fetchRecent();
-            }}
-            onNavigateToRegister={() => setCurrentTab('register')}
-            onContinueAsGuest={() => setCurrentTab('workspace')}
+          <Route
+            path="/register"
+            element={
+              <PublicAuthRoute>
+                <RegisterPage />
+              </PublicAuthRoute>
+            }
           />
-        )}
 
-        {currentTab === 'register' && (
-          <RegisterPage
-            onSuccess={() => {
-              setCurrentTab('workspace');
-              fetchRecent();
-            }}
-            onNavigateToLogin={() => setCurrentTab('login')}
-            onContinueAsGuest={() => setCurrentTab('workspace')}
+          <Route
+            path="/overview"
+            element={
+              <ProtectedRoute>
+                <LandingPage
+                  onOpenWorkspace={() => navigate('/workspace')}
+                  onOpenAnalytics={() => navigate('/analytics')}
+                  onOpenModelInfo={() => navigate('/model-evaluation')}
+                />
+              </ProtectedRoute>
+            }
           />
-        )}
 
-        {currentTab === 'profile' && (
-          <ProfilePage
-            onLogoutSuccess={() => {
-              setCurrentTab('landing');
-              setCurrentPrediction(null);
-              fetchRecent();
-            }}
+          <Route
+            path="/workspace"
+            element={
+              <ProtectedRoute>
+                <WorkspacePage
+                  onAnalyze={handleAnalyze}
+                  loading={predictionLoading}
+                  currentPrediction={currentPrediction}
+                  errorMessage={errorMessage}
+                  onClearError={() => setErrorMessage(null)}
+                  recentPredictions={recentPredictions}
+                  onSelectRecent={(item) => setCurrentPrediction(item)}
+                  onNavigateToHistory={() => navigate('/history')}
+                />
+              </ProtectedRoute>
+            }
           />
-        )}
+
+          <Route
+            path="/analytics"
+            element={
+              <ProtectedRoute>
+                <AnalyticsDashboard onNavigateToWorkspace={() => navigate('/workspace')} />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/model-evaluation"
+            element={
+              <ProtectedRoute>
+                <ModelPerformance />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/model"
+            element={
+              <ProtectedRoute>
+                <Navigate to="/model-evaluation" replace />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/history"
+            element={
+              <ProtectedRoute>
+                <HistoryPage onHistoryChange={fetchRecent} />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage
+                  health={health}
+                  onRefreshHealth={fetchHealth}
+                  onLogoutSuccess={handleLogoutSuccess}
+                />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage onLogoutSuccess={handleLogoutSuccess} />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="*"
+            element={
+              <Navigate to={isAuthenticated ? '/workspace' : '/login'} replace />
+            }
+          />
+        </Routes>
       </main>
 
       {/* Footer */}
@@ -212,7 +341,9 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <MindTextApp />
+        <BrowserRouter>
+          <MindTextApp />
+        </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>
   );
