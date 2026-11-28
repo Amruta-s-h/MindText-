@@ -12,9 +12,16 @@ import type {
   User,
 } from '../types/sentiment';
 
-// Configure base API URL: supports VITE_API_BASE_URL env variable or defaults to relative '/api'
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-const API_PREFIX = BASE_URL ? `${BASE_URL}/api` : '/api';
+// Configure base API URL: uses Vite environment variable VITE_API_URL (or legacy VITE_API_BASE_URL),
+// defaulting to the deployed Render backend URL.
+const DEFAULT_BACKEND_URL = 'https://mindtext.onrender.com';
+const RAW_API_URL = (
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  DEFAULT_BACKEND_URL
+).trim();
+const BASE_URL = RAW_API_URL.replace(/\/+$/, '').replace(/\/api$/, '');
+const API_PREFIX = `${BASE_URL}/api`;
 
 /**
  * Storage key for user JWT token
@@ -63,36 +70,52 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+  const maxAttempts = 2;
 
-    const isJson = response.headers.get('content-type')?.includes('application/json');
-    const data = isJson ? await response.json() : null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      });
 
-    if (!response.ok) {
-      if (!isJson && response.status >= 500) {
-        throw new ApiError(
-          `Server error (${response.status}): The backend service is currently unavailable or returned an unexpected error.`,
-          response.status
-        );
+      const isJson = response.headers.get('content-type')?.includes('application/json');
+      const data = isJson ? await response.json() : null;
+
+      // Retry once if Render proxy returns transient 502/503/504 during cold start
+      if (!response.ok && [502, 503, 504].includes(response.status) && attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        continue;
       }
-      const serverMessage = data?.error || data?.message || response.statusText;
-      throw new ApiError(serverMessage || `Request failed with status ${response.status}`, response.status);
-    }
 
-    return data as T;
-  } catch (err: unknown) {
-    if (err instanceof ApiError) {
-      throw err;
+      if (!response.ok) {
+        if (!isJson && response.status >= 500) {
+          throw new ApiError(
+            `Server error (${response.status}): The backend service at ${BASE_URL} is waking up or temporarily unavailable. Please try again in a few seconds.`,
+            response.status
+          );
+        }
+        const serverMessage = data?.error || data?.message || response.statusText;
+        throw new ApiError(serverMessage || `Request failed with status ${response.status}`, response.status);
+      }
+
+      return data as T;
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        throw err;
+      }
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        continue;
+      }
+      // Network / CORS / offline error after retry
+      throw new ApiError(
+        `Unable to reach the backend server at ${BASE_URL}. If the server was sleeping, please wait a few seconds and try again.`
+      );
     }
-    // Network / offline error
-    throw new ApiError(
-      'Unable to connect to the backend server. Please ensure the Python Flask API is running at http://127.0.0.1:5000.'
-    );
   }
+
+  throw new ApiError(`Unable to reach the backend server at ${BASE_URL}.`);
 }
 
 // -------------------------------------------------------------

@@ -60,20 +60,29 @@ def create_app(test_config=None):
     # Initialize extensions
     db.init_app(app)
 
-    # Enable CORS for frontend clients (development & production origins)
+    # Enable CORS for frontend clients (development & production Vercel origins)
+    allowed_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://mind-text.vercel.app",
+        "https://mindtext.vercel.app",
+        re.compile(r"^https://[a-zA-Z0-9-]+\.vercel\.app$"),
+    ]
+    extra_frontend_url = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
+    if extra_frontend_url and extra_frontend_url not in allowed_origins:
+        allowed_origins.append(extra_frontend_url)
+
     CORS(
         app,
         resources={
-            r"/api/*": {
-                "origins": [
-                    "http://localhost:5173",
-                    "http://127.0.0.1:5173",
-                    "http://localhost:3000",
-                    "http://127.0.0.1:3000",
-                    "https://mind-text.vercel.app"
-                ],
+            r"/*": {
+                "origins": allowed_origins,
                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization"]
+                "allow_headers": ["Content-Type", "Authorization"],
+                "expose_headers": ["Content-Type", "Authorization"],
+                "max_age": 3600
             }
         }
     )
